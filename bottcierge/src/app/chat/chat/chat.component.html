@@ -1,0 +1,31 @@
+<div class="chat-container" #chatContainer id="chat-container">
+  <div
+    *ngFor="let message of chatService.messages$ | async; let i = index"
+    class="message"
+    [ngClass]="{
+      'user-message': message.user === 'User',
+      'bot-message': message.user === 'Bot'
+    }"
+  >
+    <strong>{{ message.user }}:</strong> {{ message.text }}
+
+    <div *ngIf="message.choices && message.choices.length > 0" class="choices">
+      <button
+        *ngFor="let choice of message.choices"
+        (click)="handleUserChoice(choice)"
+        [disabled]="!canIClick(i)"
+      >
+        {{ choice.label }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- <div class="input-container">
+  <input
+    [(ngModel)]="userMessage"
+    (keyup.enter)="sendMessage()"
+    placeholder="Type your message..."
+  />
+  <button (click)="sendMessage()">Send</button>
+</div> -->
