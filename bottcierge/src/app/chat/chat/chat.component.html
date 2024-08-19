@@ -1,3 +1,4 @@
+{{ currentState }}
 <div class="chat-container" #chatContainer id="chat-container">
   <div
     *ngFor="let message of chatService.messages$ | async; let i = index"

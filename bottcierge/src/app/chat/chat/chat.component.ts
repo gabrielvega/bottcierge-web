@@ -2,7 +2,13 @@
 
 import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { ChatService } from '../services/chat.service';
-import { Choice, Message, OrderItem } from '../services/chat.interface';
+import {
+  Brand,
+  Choice,
+  MenuCategory,
+  Message,
+  OrderItem,
+} from '../services/chat.interface';
 
 @Component({
   selector: 'app-chat',
@@ -43,6 +49,7 @@ export class ChatComponent implements OnInit {
   }
 
   handleUserChoice(choice: Choice) {
+    console.log(choice);
     switch (choice.action) {
       case '*PLACE_ORDER*':
         this.showMenuCategories();
@@ -54,27 +61,36 @@ export class ChatComponent implements OnInit {
         this.closeOrder();
         break;
       case '*SELECT_CATEGORY*':
-        this.showSpiritCategories(choice.value);
+        this.showSpiritCategories(choice.id);
         break;
       case '*SELECT_BRAND*':
-        this.showBrands(choice.value);
+        this.showBrands(choice.id);
         break;
       case '*SELECT_BOTTLE*':
-        this.showBottles(choice.value);
+        // if (this.selectedVIPPackage) {
+        //   this.addBottleToVIPPackage(choice);
+        // } else {
+        this.showBottles(choice.id);
+        // }
         break;
       case '*ADD_ITEM*':
-        this.addItemToOrder(JSON.parse(choice.value));
+        if (this.selectedVIPPackage) {
+          this.addBottleToVIPPackage(choice);
+        } else {
+          this.addItemToOrder(choice);
+        }
         break;
       case '*SELECT_VIP_PACKAGE*':
-        this.selectVIPPackage(choice.value);
+        this.selectVIPPackage(choice.id);
         break;
       case '*ADD_ADDITIONAL_SERVICE*':
-        this.addAdditionalService(choice.value);
+        this.addAdditionalService(choice.id);
         break;
       default:
         this.chatService.addMessage({
           user: 'Bot',
           text: "I'm sorry, I didn't understand that choice. Can you please try again?",
+          choices: this.chatService.getMenuCategories(),
         });
     }
     setTimeout(() => {
@@ -95,35 +111,67 @@ export class ChatComponent implements OnInit {
     });
   }
 
-  showSpiritCategories(menuCategoryId: string) {
-    this.currentState = 'SPIRIT_CATEGORIES';
+  private showCategoryNotAvailable(categoryType: string, itemName: string) {
+    this.currentState = 'MENU_CATEGORIES';
     this.chatService.addMessage({
       user: 'Bot',
-      text: 'Please select one of the following spirit categories:',
-      choices: this.chatService.getSpiritCategories(menuCategoryId),
+      text: `I apologize, but there are no ${categoryType} available for ${itemName}. Please choose another option:`,
+      choices: this.chatService.getMenuCategories(),
     });
+  }
+
+  showSpiritCategories(menuCategoryId: string) {
+    const spiritCategories =
+      this.chatService.getSpiritCategories(menuCategoryId);
+
+    if (spiritCategories.length === 0) {
+      this.showCategoryNotAvailable('spirit categories', 'this menu category');
+    } else {
+      this.currentState = 'SPIRIT_CATEGORIES';
+      this.chatService.addMessage({
+        user: 'Bot',
+        text: 'Please select one of the following spirit categories:',
+        choices: spiritCategories,
+      });
+    }
   }
 
   showBrands(spiritCategory: string) {
-    this.currentState = 'BRANDS';
-    this.chatService.addMessage({
-      user: 'Bot',
-      text: `Please select one of the following ${spiritCategory} brands:`,
-      choices: this.chatService.getBrands(spiritCategory),
-    });
+    const brands = this.chatService.getBrands(spiritCategory);
+
+    if (brands.length === 0) {
+      this.showCategoryNotAvailable('brands', spiritCategory);
+    } else {
+      this.currentState = 'BRANDS';
+      this.chatService.addMessage({
+        user: 'Bot',
+        text: `Please select one of the following ${spiritCategory} brands:`,
+        choices: brands,
+      });
+    }
   }
 
   showBottles(brand: string) {
-    this.currentState = 'BOTTLES';
-    this.chatService.addMessage({
-      user: 'Bot',
-      text: `Please select one of the following ${brand} bottles:`,
-      choices: this.chatService.getBottles(brand),
-    });
+    const bottles = this.chatService.getBottles(brand);
+
+    if (bottles.length === 0) {
+      this.showCategoryNotAvailable('bottles', brand);
+    } else {
+      this.currentState = 'BOTTLES';
+      this.chatService.addMessage({
+        user: 'Bot',
+        text: `Please select one of the following ${brand} bottles:`,
+        choices: bottles,
+      });
+    }
   }
 
-  addItemToOrder(bottle: OrderItem) {
-    this.chatService.addItemToOrder(bottle);
+  addItemToOrder(bottle: Choice) {
+    this.chatService.addItemToOrder({
+      label: bottle.label,
+      price: bottle.price,
+      quantity: 1,
+    } as OrderItem);
     this.chatService.addMessage({
       user: 'Bot',
       text: `Excellent choice! I've added ${
@@ -225,10 +273,12 @@ export class ChatComponent implements OnInit {
   }
 
   selectVIPPackage(packageId: string) {
+    console.log(packageId);
     this.selectedVIPPackage = packageId;
     const vipPackage = this.chatService.vipPackages.find(
       (pkg) => pkg.id === packageId
     );
+    console.log(vipPackage);
     if (vipPackage) {
       this.chatService.addMessage({
         user: 'Bot',
@@ -243,15 +293,71 @@ export class ChatComponent implements OnInit {
     const vipPackage = this.chatService.vipPackages.find(
       (pkg) => pkg.id === this.selectedVIPPackage
     );
+
     if (vipPackage && this.customizationCount < vipPackage.customizableItems) {
       this.chatService.addMessage({
         user: 'Bot',
         text: `Please select your bottle #${this.customizationCount + 1}:`,
-        choices: this.chatService.getSpiritCategories('bottle-list'),
+        choices: this.chatService.getSpiritCategories('*123*'),
       });
     } else {
       this.finishVIPPackage();
     }
+  }
+
+  addBottleToVIPPackage(bottle: Choice) {
+    this.customizationCount++;
+    this.chatService.addMessage({
+      user: 'Bot',
+      text: `Great! You've selected ${bottle.label} as bottle #${this.customizationCount}.`,
+    });
+
+    const vipPackage = this.chatService.vipPackages.find(
+      (pkg) => pkg.id === this.selectedVIPPackage
+    );
+    this.chatService.addItemToOrder({
+      label: bottle.label,
+      price: bottle.price,
+      quantity: 1,
+      description: vipPackage?.label,
+    } as OrderItem);
+    if (vipPackage && this.customizationCount < vipPackage.customizableItems) {
+      this.customizeVIPPackage();
+    } else {
+      this.finishVIPPackage();
+    }
+  }
+
+  finishVIPPackage() {
+    const vipPackage = this.chatService.vipPackages.find(
+      (pkg) => pkg.id === this.selectedVIPPackage
+    );
+    if (vipPackage) {
+      this.chatService.addItemToOrder({
+        label: vipPackage.label,
+        price: vipPackage.price,
+        quantity: 1,
+        description: vipPackage.description,
+      } as OrderItem);
+
+      this.chatService.addMessage({
+        user: 'Bot',
+        text: `Excellent! You've completed customizing your ${vipPackage.label}. I've added it to your order.`,
+        //  Your current subtotal is $${this.chatService.currentOrder.subtotal.toFixed(        2        )}.
+      });
+
+      this.askForMoreItems();
+    } else {
+      this.chatService.addMessage({
+        user: 'Bot',
+        text: "I'm sorry, there was an error processing your VIP package. Please try again or select a different option.",
+      });
+      this.showMainMenu();
+    }
+
+    // Reset VIP package selection
+    this.selectedVIPPackage = null;
+    this.customizationCount = 0;
   }
 
   addAdditionalService(serviceId: string) {
@@ -266,7 +372,7 @@ export class ChatComponent implements OnInit {
           label: service.label,
           price: service.price,
           quantity: 1,
-        });
+        } as OrderItem);
         this.askForMoreItems();
       }
     }
@@ -295,7 +401,7 @@ export class ChatComponent implements OnInit {
           label: `${paradeService.label}: "${this.paradeMessage}"`,
           price: paradeService.price,
           quantity: 1,
-        });
+        } as OrderItem);
         this.chatService.addMessage({
           user: 'Bot',
           text: `Got it. That's how you start a party! Great choice. Your parade message "${this.paradeMessage}" has been added to your order.`,
@@ -392,39 +498,5 @@ export class ChatComponent implements OnInit {
       }
       this.userMessage = '';
     }
-  }
-
-  finishVIPPackage() {
-    const vipPackage = this.chatService.vipPackages.find(
-      (pkg) => pkg.id === this.selectedVIPPackage
-    );
-    if (vipPackage) {
-      this.chatService.addItemToOrder({
-        label: vipPackage.label,
-        price: vipPackage.price,
-        quantity: 1,
-      });
-
-      this.chatService.addMessage({
-        user: 'Bot',
-        text: `Excellent choice! I've added the ${
-          vipPackage.label
-        } to your order. Your current subtotal is $${this.chatService.currentOrder.subtotal.toFixed(
-          2
-        )}.`,
-      });
-
-      this.askForMoreItems();
-    } else {
-      this.chatService.addMessage({
-        user: 'Bot',
-        text: "I'm sorry, there was an error processing your VIP package. Please try again or select a different option.",
-      });
-      this.showMainMenu();
-    }
-
-    // Reset VIP package selection
-    this.selectedVIPPackage = null;
-    this.customizationCount = 0;
   }
 }
